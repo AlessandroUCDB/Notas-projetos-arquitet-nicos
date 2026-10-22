@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notas UCDB — Protótipo</title>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{--navy:#17324d;--blue:#245b85;--bg:#f4f6f8;--line:#d9e0e7;--muted:#5e6c78;--green:#176b45;--red:#a83232}
+*{box-sizing:border-box}body{margin:0;font:16px/1.45 Arial,sans-serif;background:var(--bg);color:#1d2933}
+header{background:var(--navy);color:white;padding:18px 16px}header h1{margin:0;font-size:22px}header p{margin:5px 0 0;color:#dbe7f0;font-size:14px}
+main{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:14px}
+.card{background:white;border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 2px 8px #142a3a0a}
+h2{font-size:18px;margin:0 0 12px;color:var(--navy)}h3{font-size:16px;margin:0 0 8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+label{display:block;font-size:13px;font-weight:bold;margin:0 0 5px;color:#334657}
+input,select,button{font:inherit;border-radius:9px;border:1px solid #b9c5cf;padding:11px;width:100%;background:white;color:#1d2933}
+input[type=file]{padding:8px;font-size:14px}
+button{cursor:pointer;font-weight:bold;background:var(--blue);border-color:var(--blue);color:white}
+button.secondary{background:white;color:var(--navy);border-color:#aab9c6}
+button.danger{background:#fff;color:var(--red);border-color:#d9aaaa}
+.small{font-size:13px;color:var(--muted)}.status{padding:10px 12px;border-radius:9px;background:#edf4f8;color:#244b68;font-size:14px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.actions button{width:auto;flex:1;min-width:140px}
+.hidden{display:none!important}
+.studentrow{display:grid;grid-template-columns:minmax(0,1fr) 90px;gap:10px;align-items:center;border-bottom:1px solid #edf0f2;padding:10px 0}
+.studentrow:last-child{border-bottom:0}.studentname{font-weight:bold}.studentmeta{font-size:12px;color:var(--muted)}
+.metric{border:1px solid var(--line);border-radius:10px;padding:12px;background:#fbfcfd}.metric b{display:block;font-size:23px;color:var(--navy)}
+table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #e5e9ed;padding:9px 7px;text-align:left;vertical-align:middle;font-size:14px}th{background:#f4f7f9;color:#34495b}
+td input{padding:9px;min-width:74px}td .weight{white-space:nowrap;color:#445563}
+.tablewrap{overflow-x:auto}.gradehead{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+#rubricTable{min-width:600px}.score{font-weight:bold;color:var(--navy)}
+footer{padding:10px 16px 24px;text-align:center;color:var(--muted);font-size:12px}
+@media(min-width:800px){main{grid-template-columns:1fr 1fr}.wide{grid-column:1/-1}}
+</style>
+</head>
+<body>
+<header><h1>Notas UCDB</h1><p>Protótipo para lançamento de notas por turma, aluno e critérios com pesos</p></header>
+<main>
+<section class="card wide">
+<h2>1. Importar as planilhas</h2>
+<p class="small">Selecione a planilha de alunos (com colunas RA, Nome e Turma) e a planilha de critérios (descrição na coluna A e pontuação máxima na coluna B). Os arquivos são processados neste navegador.</p>
+<div class="grid">
+<div><label for="rosterFile">Planilha de alunos (.xlsx)</label><input id="rosterFile" type="file" accept=".xlsx,.xls,.csv"></div>
+<div><label for="rubricFile">Planilha de critérios e pesos (.xlsx)</label><input id="rubricFile" type="file" accept=".xlsx,.xls,.csv"></div>
+</div>
+<div class="actions"><button id="importBtn">Importar arquivos selecionados</button><button class="secondary" id="demoBtn">Carregar exemplo desta turma</button></div>
+<div id="importStatus" class="status" style="margin-top:12px">Nenhuma planilha importada ainda.</div>
+</section>
+
+<section class="card">
+<h2>2. Identificação da turma</h2>
+<div class="grid">
+<div><label for="course">Curso</label><select id="course"><option>Arquitetura e Urbanismo</option><option>Engenharia Civil</option><option>Outro</option></select></div>
+<div><label for="discipline">Disciplina</label><input id="discipline" placeholder="Ex.: Desenho Técnico"></div>
+<div><label for="className">Turma / período</label><input id="className" placeholder="Ex.: A — 2026/2"></div>
+</div>
+<div class="actions"><button class="secondary" id="saveBtn">Salvar alterações neste navegador</button><button class="secondary" id="exportBtn">Exportar notas para Excel</button></div>
+<p class="small">O salvamento fica neste navegador e neste aparelho. Para usar em mais de um dispositivo, será necessária uma versão conectada a uma base de dados online.</p>
+</section>
+
+<section class="card">
+<h2>3. Selecionar aluno</h2>
+<label for="studentSearch">Buscar por nome ou RA</label><input id="studentSearch" placeholder="Digite parte do nome ou RA">
+<div id="studentList" style="margin-top:8px"><p class="small">Importe a lista de alunos para começar.</p></div>
+</section>
+
+<section class="card">
+<h2>Resumo do aluno selecionado</h2>
+<div id="selectedStudent"><p class="small">Selecione um aluno na lista ao lado.</p></div>
+<div class="grid" style="margin-top:12px">
+<div class="metric"><span class="small">Nota calculada</span><b id="finalGrade">—</b></div>
+<div class="metric"><span class="small">Critérios preenchidos</span><b id="completedCount">—</b></div>
+</div>
+</section>
+
+<section class="card wide">
+<div class="gradehead"><h2 style="margin:0">4. Lançamento por critério</h2><span id="maxGrade" class="small">Importe os critérios para visualizar</span></div>
+<div id="rubricArea" style="margin-top:12px"><p class="small">A tabela de critérios aparecerá aqui depois da importação.</p></div>
+<div class="actions"><button id="saveStudentBtn">Salvar notas deste aluno</button><button class="secondary" id="clearStudentBtn">Limpar notas deste aluno</button></div>
+</section>
+
+<section class="card wide">
+<h2>5. Conferência da turma</h2>
+<div id="classSummary"><p class="small">Importe os dados para gerar o resumo da turma.</p></div>
+<div class="actions"><button class="secondary" id="exportSummaryBtn">Exportar boletim da turma</button></div>
+</section>
+</main>
+<footer>Protótipo inicial — confira os pesos e as regras de cálculo antes de usar notas oficiais. Não contém integração com o sistema acadêmico da UCDB.</footer>
+<script>
+const state={students:[],criteria:[],selected:null,grades:{},groups:[],maxTotal:0};
+const $=id=>document.getElementById(id);
+function normalize(s){return String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()}
+function num(v){if(typeof v==='number')return v;if(v===null||v===undefined||v==='')return NaN;return Number(String(v).replace(',','.'))}
+function readWorkbook(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'});resolve(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:null,raw:true}));}catch(err){reject(err)}};r.onerror=reject;r.readAsArrayBuffer(file)})}
+function cellText(v){return String(v??'').trim()}
+async function importFiles(){
+ if(!window.XLSX){$('importStatus').textContent='A biblioteca de leitura de Excel não carregou. Verifique a conexão com a internet e recarregue a página.';return}
+ const rf=$('rosterFile').files[0], cf=$('rubricFile').files[0];
+ if(!rf||!cf){$('importStatus').textContent='Selecione os dois arquivos Excel antes de importar.';return}
+ try{
+  const [rows,rr]=await Promise.all([readWorkbook(rf),readWorkbook(cf)]);
+  const header=rows[0]||[];
+  const idxRA=header.findIndex(x=>/^(ra|matricula|matrícula|registro academico|registro acadêmico)$/i.test(cellText(x)));
+  const idxName=header.findIndex(x=>/^(nome|aluno|nome do aluno)$/i.test(cellText(x)));
+  const idxClass=header.findIndex(x=>/^(turma|classe|seção|secao)$/i.test(cellText(x)));
+  if(idxName<0)throw new Error('Não encontrei a coluna Nome/Aluno na planilha de alunos.');
+  state.students=rows.slice(1).filter(r=>r&&r[idxName]).map((r,i)=>({id:String(r[idxRA>=0?idxRA:idxName]??('aluno-'+i)),ra:idxRA>=0?cellText(r[idxRA]):'',name:cellText(r[idxName]),className:idxClass>=0?cellText(r[idxClass]):''}));
+  // Criteria rows: formulas/categories are inferred from labels and numeric maximums.
+  const parsed=[];
+  for(let i=1;i<rr.length;i++){
+   const label=cellText(rr[i]?.[0]);const raw=rr[i]?.[1];
+   if(!label||/^nota$/i.test(label))continue;
+   const max=num(raw);
+   if(!Number.isFinite(max)||max<0)continue;
+   const next=cellText(rr[i+1]?.[0]);
+   const hasSub=!!next && !/^nota$/i.test(next) && /[.(]/.test(label) && !Number.isFinite(num(rr[i+1]?.[1])===NaN?NaN:NaN);
+   // Formula cells are group subtotals; parenthetical section titles with following rows are usually group headings.
+   const isFormula=typeof raw==='string' && raw.startsWith('=');
+   const sectionTitle=/\([^)]*\d/.test(label) && !!next;
+   if(isFormula || (sectionTitle && !/^\s*\d/.test(label))) continue;
+   parsed.push({key:'c'+i,label,max,sourceRow:i+1});
+  }
+  // If formula rows were skipped but some sections have numeric-only headings, remove likely headings when followed by a subcriterion.
+  state.criteria=parsed;
+  state.maxTotal=state.criteria.reduce((s,c)=>s+c.max,0);
+  state.selected=state.students[0]?.id??null;
+  $('importStatus').textContent=`Importação concluída: ${state.students.length} alunos e ${state.criteria.length} critérios identificados. Soma dos máximos importados: ${state.maxTotal.toFixed(2)} pontos. Confira a estrutura e os pesos antes de usar.`;
+  renderAll();
+ }catch(e){$('importStatus').textContent='Não foi possível importar: '+e.message}
+}
+function loadDemo(){
+ state.students=[
+ {id:'200610',ra:'200610',name:'Alice Martinho Trad',className:'A'},
+ {id:'205864',ra:'205864',name:'Ana Beatriz da Silva Leite',className:'A'},
+ {id:'204744',ra:'204744',name:'Ana Clara Pereira Cabrera',className:'A'},
+ {id:'205877',ra:'205877',name:'Ana Júlia de Souza Bernardo',className:'A'},
+ {id:'205167',ra:'205167',name:'Daniel Lucas Cervieri',className:'A'},
+ {id:'208511',ra:'208511',name:'Eduardo Barros Vaez',className:'A'},
+ {id:'207355',ra:'207355',name:'Emmory Vitória Rios Cabreira',className:'A'},
+ {id:'206750',ra:'206750',name:'Gladson Eduard Moreira Flor',className:'A'},
+ {id:'205169',ra:'205169',name:'Isabelle Deiss Drews',className:'A'},
+ {id:'205374',ra:'205374',name:'Izabely Vieira Romin',className:'A'},
+ {id:'204832',ra:'204832',name:'Julia Lopes Telles Lima',className:'A'}];
+ state.criteria=[
+ {key:'org1',label:'Carimbo com identificação e dados do projeto',max:.3},{key:'org2',label:'Diagramação organizada, legível',max:.3},{key:'org3',label:'Desenho técnico (linhas/legendas/cotas)',max:.4},
+ {key:'mem1',label:'Pontos para o partido dado em sala (teoria)',max:.4},{key:'mem2',label:'Condicionantes do programa de necessidades',max:.1},
+ {key:'prec',label:'Precedentes — embasamento',max:1},
+ {key:'imp1',label:'Limite predial hachurado',max:.2},{key:'imp2',label:'Cotas de amarração e gerais / áreas / esquina próxima',max:.4},{key:'imp3',label:'Acessos / número predial',max:.1},{key:'imp4',label:'Norte',max:.1},{key:'imp5',label:'Ruas / calçadas',max:.2},{key:'imp6',label:'Desenho técnico da implantação',max:.5},
+ {key:'pl1',label:'Acesso principal',max:.2},{key:'pl2',label:'Organização entre áreas (social/serviço/íntimo)',max:.2},{key:'pl3',label:'Circulação interna',max:.3},{key:'pl4',label:'Portas e janelas',max:.2},{key:'pl5',label:'Posição solar dos ambientes',max:.2},{key:'pl6',label:'Limpeza / leitura / legibilidade',max:.2},{key:'pl7',label:'Desenho técnico da planta',max:.5},{key:'pl8',label:'Níveis',max:.2},
+ {key:'cor1',label:'Posicionamento de ambientes (não espelhar)',max:.3},{key:'cor2',label:'Diferença de níveis',max:.2},{key:'cor3',label:'Alicerce e laje',max:.2},{key:'cor4',label:'Alinhamento de portas e janelas',max:.2},{key:'cor5',label:'Cotas',max:.2},{key:'cor6',label:'Estrutura de telhado',max:.2},{key:'cor7',label:'Caixa d’água',max:.2},
+ {key:'fach',label:'Representar fachada adequadamente',max:.5},{key:'pers1',label:'Proporção adequada às medidas em planta',max:.5},{key:'pers2',label:'Cobertura e volume interessantes',max:.3},{key:'pers3',label:'Detalhamento / capricho',max:.2},{key:'comp1',label:'Lixeira',max:.4},{key:'comp2',label:'Guarita',max:.4},{key:'comp3',label:'Caixa d’água complementar',max:.2}
+ ];
+ state.maxTotal=state.criteria.reduce((s,c)=>s+c.max,0);state.selected=state.students[0].id;
+ $('discipline').value='Desenho Técnico / Representação Arquitetônica';$('className').value='A — 2026/2';
+ $('importStatus').textContent=`Exemplo carregado: ${state.students.length} alunos demonstrativos e ${state.criteria.length} critérios. Os critérios e pesos são uma prévia e devem ser conferidos com a planilha original.`;
+ renderAll();
+}
+function gradeFor(id,key){return state.grades[id]?.[key]??''}
+function calc(id){let sum=0,filled=0;state.criteria.forEach(c=>{const v=num(gradeFor(id,c.key));if(Number.isFinite(v)){sum+=Math.max(0,Math.min(c.max,v));filled++}});return {sum,filled}}
+function renderStudents(){
+ const q=normalize($('studentSearch').value);const list=state.students.filter(s=>normalize(s.name+' '+s.ra+' '+s.className).includes(q));
+ $('studentList').innerHTML=list.length?list.map(s=>{const c=calc(s.id);return `<div class="studentrow"><div><div class="studentname">${esc(s.name)}</div><div class="studentmeta">RA: ${esc(s.ra||'—')} · Turma: ${esc(s.className||'—')}</div></div><button class="secondary" data-student="${esc(s.id)}">${s.id===state.selected?'Selecionado':c.filled?c.sum.toFixed(2).replace('.',',')+' pts':'Abrir'}</button></div>`}).join(''):'<p class="small">Nenhum aluno encontrado.</p>';
+ document.querySelectorAll('[data-student]').forEach(b=>b.onclick=()=>{state.selected=b.dataset.student;renderAll()});
+}
+function renderSelected(){
+ const s=state.students.find(s=>s.id===state.selected);if(!s){$('selectedStudent').innerHTML='<p class="small">Selecione um aluno.</p>';$('finalGrade').textContent='—';$('completedCount').textContent='—';return}
+ const c=calc(s.id);$('selectedStudent').innerHTML=`<b>${esc(s.name)}</b><div class="small">RA: ${esc(s.ra||'—')} · Turma: ${esc(s.className||'—')}</div>`;
+ $('finalGrade').textContent=c.sum.toFixed(2).replace('.',',');$('completedCount').textContent=`${c.filled} / ${state.criteria.length}`;
+}
+function renderRubric(){
+ if(!state.criteria.length){$('rubricArea').innerHTML='<p class="small">Importe os critérios para visualizar.</p>';return}
+ $('maxGrade').textContent=`Soma dos máximos: ${state.maxTotal.toFixed(2).replace('.',',')} pontos`;
+ $('rubricArea').innerHTML=`<div class="tablewrap"><table id="rubricTable"><thead><tr><th>Critério de avaliação</th><th>Máximo</th><th>Nota lançada</th></tr></thead><tbody>${state.criteria.map(c=>`<tr><td>${esc(c.label)}</td><td class="weight">${c.max.toFixed(2).replace('.',',')}</td><td><input aria-label="Nota para ${esc(c.label)}" data-criterion="${esc(c.key)}" type="number" min="0" max="${c.max}" step="0.01" placeholder="0 a ${c.max}" value="${esc(gradeFor(state.selected,c.key))}"></td></tr>`).join('')}</tbody></table></div>`;
+ document.querySelectorAll('[data-criterion]').forEach(inp=>inp.onchange=()=>{const key=inp.dataset.criterion;const v=inp.value===''?'':num(inp.value);if(v!==''&&(!Number.isFinite(v)||v<0||v>Number(inp.max))){alert(`Informe uma nota entre 0 e ${inp.max}.`);inp.value='';return}if(!state.grades[state.selected])state.grades[state.selected]={};state.grades[state.selected][key]=v;renderSelected();renderStudents();renderSummary()});
+}
+function renderSummary(){
+ if(!state.students.length){$('classSummary').innerHTML='<p class="small">Importe os dados para gerar o resumo da turma.</p>';return}
+ const rows=state.students.map(s=>{const c=calc(s.id);return `<tr><td>${esc(s.ra)}</td><td>${esc(s.name)}</td><td>${esc(s.className)}</td><td>${c.sum.toFixed(2).replace('.',',')}</td><td>${c.filled}/${state.criteria.length}</td></tr>`}).join('');
+ $('classSummary').innerHTML=`<div class="tablewrap"><table><thead><tr><th>RA</th><th>Aluno</th><th>Turma</th><th>Nota parcial</th><th>Itens preenchidos</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function renderAll(){renderStudents();renderSelected();renderRubric();renderSummary()}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function save(){const data={students:state.students,criteria:state.criteria,selected:state.selected,grades:state.grades,course:$('course').value,discipline:$('discipline').value,className:$('className').value};localStorage.setItem('notasUCDBPrototype',JSON.stringify(data));$('importStatus').textContent='Alterações salvas neste navegador.'}
+function restore(){try{const d=JSON.parse(localStorage.getItem('notasUCDBPrototype'));if(d){Object.assign(state,{students:d.students||[],criteria:d.criteria||[],selected:d.selected,grades:d.grades||{}});state.maxTotal=state.criteria.reduce((s,c)=>s+c.max,0);$('course').value=d.course||$('course').value;$('discipline').value=d.discipline||'';$('className').value=d.className||'';renderAll();$('importStatus').textContent='Dados recuperados do armazenamento deste navegador.'}}catch(e){}}
+function exportWorkbook(summaryOnly=false){
+ if(!window.XLSX){alert('A biblioteca Excel não carregou. Verifique sua conexão.');return}
+ if(!state.students.length){alert('Importe uma planilha de alunos primeiro.');return}
+ const meta=[['Curso',$('course').value],['Disciplina',$('discipline').value],['Turma/período',$('className').value],['Máximo somado dos critérios',state.maxTotal]];
+ const data=state.students.map(s=>{const c=calc(s.id);const row={'RA':s.ra,'Aluno':s.name,'Turma':s.className};if(!summaryOnly)state.criteria.forEach(k=>row[k.label]=gradeFor(s.id,k.key));row['Nota calculada']=c.sum;row['Itens preenchidos']=`${c.filled}/${state.criteria.length}`;return row});
+ const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(meta),'Identificação');XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(data),summaryOnly?'Boletim':'Notas por critério');
+ XLSX.writeFile(wb,summaryOnly?'Boletim_Turma_UCDB.xlsx':'Notas_UCDB.xlsx');
+}
+$('importBtn').onclick=importFiles;$('demoBtn').onclick=loadDemo;$('studentSearch').oninput=renderStudents;$('saveBtn').onclick=save;$('saveStudentBtn').onclick=save;
+$('clearStudentBtn').onclick=()=>{if(!state.selected)return;if(confirm('Limpar todas as notas deste aluno?')){delete state.grades[state.selected];renderAll()}};
+$('exportBtn').onclick=()=>exportWorkbook(false);$('exportSummaryBtn').onclick=()=>exportWorkbook(true);
+restore();
+</script>
+</body>
+</html>
